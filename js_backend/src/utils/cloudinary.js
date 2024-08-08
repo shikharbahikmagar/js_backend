@@ -19,7 +19,7 @@ cloudinary.config({
         })
 
         //file has been uploaded successfully
-        console.log("file is uploaded on cloudinary", response.url);
+        //console.log("file is uploaded on cloudinary", response.url);
         fs.unlinkSync(localFilePath)
         return response;
 
@@ -30,4 +30,19 @@ cloudinary.config({
     }
  }
 
- export {uploadOnCloudinary}
+ const deleteFromCloudinary = async(imagePubId) => {
+    try {
+        const response = await cloudinary.uploader.destroy(imagePubId, {
+          resource_type: 'image'
+        });
+        //console.log('Delete result:', result);
+        return response;
+      } catch (error) {
+        console.error('Error deleting old avatar:', error);
+        return null;
+      }
+ }
+
+
+
+ export {uploadOnCloudinary, deleteFromCloudinary}

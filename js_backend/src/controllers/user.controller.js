@@ -1,7 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {ApiError} from "../utils/ApiError.js"
 import { User} from "../models/user.model.js"
-import {uploadOnCloudinary} from "../utils/cloudinary.js"
+import {uploadOnCloudinary, deleteFromCloudinary} from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken"
 import mongoose from "mongoose";
@@ -112,7 +112,7 @@ const loginUser = asyncHandler( async(req, res) => {
     // return res
 
     const {username, email, password} = req.body
-    console.log(email);
+    //console.log(email);
     //check if username or email is entered
     if(!username && !email) {
         throw new ApiError(400, "Username or email is required")
@@ -142,6 +142,8 @@ const loginUser = asyncHandler( async(req, res) => {
 
     const loggedInUser = await User.findById(user._id)
     .select("-password -refreshToken")
+
+    //console.log(loggedInUser.avatar);
 
     const options = {
         httpOnly: true,
@@ -175,7 +177,7 @@ const logoutUser = asyncHandler(async (req, resp) => {
 
     const user = req.user
 
-    //set refresh token to undefined
+    //set refresh token to x
     await User.findByIdAndUpdate(
         user._id,
         {
@@ -325,18 +327,31 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 //update user avatar
 const updateUserAvatar = asyncHandler(async(req, res) => {
 
-    const {avatarLocalPath} = req.file?.path
+    //console.log(req.file?.path);
+    const avatarLocalPath = req.file?.path
+    //console.log(avatarLocalPath);
 
     if(!avatarLocalPath)
     {
         throw new ApiError(400, "Avatar file is missing")
     }
 
-    const avatar = uploadOnCloudinary(avatarLocalPath)
+    const oldImageUrl = req.user?.avatar;
+    //console.log(oldImageUrl);
+
+    const extractPublicIdFromUrl = (url) => {
+        const regex = /\/upload\/(?:v\d+\/)?([^\/\.]+)/;
+        const match = url.match(regex);
+        return match ? match[1] : null;
+      };
+
+      const old_pub_id = extractPublicIdFromUrl(oldImageUrl)
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
 
     if(!avatar.url)
     {
-        throw new ApiError(400, "Error while uploading on avatar")
+        throw new ApiError(400, "Error while uploading an avatar")
     }
 
     const user = await User.findByIdAndUpdate(
@@ -349,21 +364,38 @@ const updateUserAvatar = asyncHandler(async(req, res) => {
         {new: true}
     ).select("-password")
 
+    const oldAvatarDeleteResponse = await deleteFromCloudinary(old_pub_id)
+    if(!oldAvatarDeleteResponse)
+    {
+        throw new ApiError(400, "Error while deleting old avatar")
+    }
+
     return res
     .status(200)
-    .json(new ApiResponse(200, user, "Avatar Updated Successfully"))
+    .json(new ApiResponse(200, "Avatar Updated Successfully", user))
     
 })
 
 
 const updateUserCoverImage = asyncHandler(async(req, res) => {
 
-    const {coverImageLocalPath} = req.file?.path
+    const coverImageLocalPath = req.file?.path
+    //console.log(coverImageLocalPath);
 
     if(!coverImageLocalPath)
     {
         throw new ApiError(400, "Cover Image File is Missing")
     }
+
+    const oldCoverImagePath = req.user?.coverImage
+
+    const extractPublicIdFromUrl = (url) => {
+        const regex = /\/upload\/(?:v\d+\/)?([^\/\.]+)/;
+        const match = url.match(regex);
+        return match ? match[1] : null;
+      };
+
+    const old_pub_id = extractPublicIdFromUrl(oldCoverImagePath)
 
     const coverImage = await uploadOnCloudinary(coverImageLocalPath)
 
@@ -385,9 +417,18 @@ const updateUserCoverImage = asyncHandler(async(req, res) => {
         }
     ).select("-password")
 
+    const deleteCoverImageRes = await deleteFromCloudinary(old_pub_id)
+
+    if(!deleteCoverImageRes)
+    {
+        throw new ApiError(400, "Error while deleting from cloudinary")
+
+    }
+
+
     return res
     .status(200)
-    .json(new ApiResponse(200, user, "Cover Image Updated Successfully"))
+    .json(new ApiResponse(200, "Cover Image Updated Successfully", user))
 
 })
 
